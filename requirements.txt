@@ -9,3 +9,4 @@ imitation
 matplotlib
 seaborn
 opencv-python-headless
+minigrid

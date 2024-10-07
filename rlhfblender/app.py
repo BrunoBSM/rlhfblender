@@ -6,7 +6,7 @@ import zipfile
 
 import uvicorn
 from databases import Database
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -35,23 +35,9 @@ os.makedirs("logs", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 os.makedirs("data/action_labels", exist_ok=True)
 
-# == App ==
-app = FastAPI(
-    title="Test Python Backend",
-    description="""This is a template for a Python backend.
-                   It provides access via REST API.""",
-    version="0.1.0",
-)
-app.include_router(data.router)
-
-app.mount("/files", StaticFiles(directory=os.path.join("rlhfblender", "static_files")), name="files")
-app.mount("/action_labels", StaticFiles(directory=os.path.join("data", "action_labels")), name="action_labels")
-app.mount("/logs", StaticFiles(directory="logs"), name="logs")
-
 database = Database(os.environ.get("RLHFBLENDER_DB_HOST", "sqlite:///rlhfblender.db"))
 
-
-@app.on_event("startup")
+# Define the startup function
 async def startup():
     await database.connect()
     await db_handler.create_table_from_model(database, Project)
@@ -60,7 +46,7 @@ async def startup():
     await db_handler.create_table_from_model(database, Dataset)
     await db_handler.create_table_from_model(database, TrackingItem)
 
-    # add sampler and feedback model to app state
+    # Access the app instance using FastAPI context
     app.state.sampler = Sampler(None, None, os.path.join("data", "renders"))
     app.state.feedback_translator = FeedbackTranslator(None, None)
 
@@ -73,11 +59,24 @@ async def startup():
         print("No startup script found. Skipping...")
     print("Startup script finished.")
 
-
-@app.on_event("shutdown")
+# Define the shutdown function
 async def shutdown():
     await database.disconnect()
 
+# == App ==
+app = FastAPI(
+    title="Test Python Backend",
+    description="""This is a template for a Python backend.
+                   It provides access via REST API.""",
+    version="0.1.0",
+    on_startup=[startup],  # No parameters needed for startup
+    on_shutdown=[shutdown]  # No parameters needed for shutdown
+)
+app.include_router(data.router)
+
+app.mount("/files", StaticFiles(directory=os.path.join("rlhfblender", "static_files")), name="files")
+app.mount("/action_labels", StaticFiles(directory=os.path.join("data", "action_labels")), name="action_labels")
+app.mount("/logs", StaticFiles(directory="logs"), name="logs")
 
 # Allow CORS
 app.add_middleware(
@@ -124,6 +123,9 @@ class AddDataRequest(BaseModel):
     model_name: str
     data: dict
 
+    class Config:
+        protected_namespaces = ()
+
 
 @app.post("/add_data", response_model=BaseModel, tags=["DATA"])
 async def add_data(req: AddDataRequest):
@@ -138,6 +140,9 @@ class UpdateDataRequest(BaseModel):
     model_name: str
     item_id: int
     data: dict
+
+    class Config:
+        protected_namespaces = ()
 
 
 @app.post("/update_data", response_model=BaseModel, tags=["DATA"])

@@ -76,7 +76,7 @@ async def run_benchmark(request: List[BenchmarkRequestModel]) -> list[Experiment
             )
         else:
             # for the experiments, we need to register the environment first (e.g. for annotations, naming of the action space)
-            if not db_handler.check_if_exists(database, Environment, key=benchmark_run.env_id, key_column="registration_id"):
+            if not await db_handler.check_if_exists(database, Environment, key=benchmark_run.env_id, key_column="registration_id"):
                 # We lazily register the environment if it is not registered yet, this is only done once
                 database_env = initial_registration(
                     benchmark_run.env_id,
@@ -98,6 +98,12 @@ async def run_benchmark(request: List[BenchmarkRequestModel]) -> list[Experiment
                 created_timestamp=int(time.time()),
             )
             await db_handler.add_entry(database, Experiment, exp)
+
+        # Ensure database_env is always assigned
+        if 'database_env' not in locals():
+            database_env = await db_handler.get_single_entry(
+                database, Environment, key=benchmark_run.env_id, key_column="registration_id"
+            )
 
         # add the current checkpoint to the experiment
         existing_checkpoints = exp.checkpoint_list if "checkpoint_list" in exp else []
